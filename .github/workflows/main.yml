@@ -1,0 +1,51 @@
+name: MacRDP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: MacRDP
+    runs-on: macos-latest
+
+    steps:
+      - name: Start mac VNC + Tailscale
+        run: |
+          curl -s -o start.sh -L "https://raw.githubusercontent.com/vortaxx2008/VNC-MAC/refs/heads/main/start.sh"
+          chmod +x start.sh
+          # مرّر الـ AuthKey من Secrets
+          bash start.sh "${{ secrets.TAILSCALE_AUTHKEY }}"
+
+      - name: Show VNC Login
+        run: |
+          curl -s -o login.sh -L "https://raw.githubusercontent.com/vortaxx2008/VNC-MAC/refs/heads/main/login.sh"
+          chmod +x login.sh
+          bash login.sh
+
+      - name: MacOS System running...
+        uses: mxschmitt/action-tmate@v2name: MacRDP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: MacRDP
+    runs-on: macos-latest
+
+    steps:
+      - name: Start mac VNC + Tailscale
+        run: |
+          curl -s -o start.sh -L "https://raw.githubusercontent.com/vortaxx2008/VNC-MAC/refs/heads/main/start.sh"
+          chmod +x start.sh
+          # مرّر الـ AuthKey من Secrets
+          bash start.sh "${{ secrets.TAILSCALE_AUTHKEY }}"
+
+      - name: Show VNC Login
+        run: |
+          curl -s -o login.sh -L "https://raw.githubusercontent.com/vortaxx2008/VNC-MAC/refs/heads/main/login.sh"
+          chmod +x login.sh
+          bash login.sh
+
+      - name: MacOS System running...
+        uses: mxschmitt/action-tmate@v2
