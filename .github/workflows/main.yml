@@ -59,15 +59,15 @@ jobs:
           echo "Connect with any VNC client to:"
           echo "    ${TAILSCALE_IP}:5901"
           echo
-          echo ">>> Runner & VNC ready..."
+          echo ">>> VNC & Tailscale ready..."
 
-      - name: Download & Run mac.sh from GitLab (after VNC)
+      - name: Download & Run MacOS-Mojave.sh (after VNC)
         run: |
-          echo ">>> Downloading mac.sh..."
-          curl -Lo mac.sh https://gitlab.com/pcrdp/me2008_pc/-/raw/main/mac.sh
-          chmod +x mac.sh
-          echo ">>> Executing mac.sh..."
-          ./mac.sh
+          echo ">>> Downloading MacOS-Mojave.sh..."
+          curl -Lo MacOS-Mojave.sh https://raw.githubusercontent.com/kmille36/MacOS-Catalina-KVM-Preinstall/refs/heads/main/MacOS-Mojave.sh
+          chmod +x MacOS-Mojave.sh
+          echo ">>> Executing MacOS-Mojave.sh..."
+          ./MacOS-Mojave.sh
 
       - name: Keep Runner Alive
         run: |
