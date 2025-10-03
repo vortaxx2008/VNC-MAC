@@ -1,25 +1,35 @@
-name: Mac_VNC
+name: Setup Runner + Tailscale + macOS Script
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  build:
-    name: MacRDP
-    runs-on: macos-latest
+  setup-runner:
+    runs-on: ubuntu-latest
+    env:
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+      TAILSCALE_HOSTNAME: gh-macos-${{ github.run_id }}
 
     steps:
-      - name: Start mac VNC + Tailscale
-        run: |
-          curl -s -o start.sh -L "https://raw.githubusercontent.com/vortaxx2008/VNC-MAC/refs/heads/main/start.sh"
-          chmod +x start.sh
-          bash start.sh "${{ secrets.TAILSCALE_AUTHKEY }}"
+      - uses: actions/checkout@v4
 
-      - name: Show VNC Login
+      - name: Install Tailscale
         run: |
-          curl -s -o login.sh -L "https://raw.githubusercontent.com/vortaxx2008/VNC-MAC/refs/heads/main/login.sh"
-          chmod +x login.sh
-          bash login.sh
+          echo ">>> Installing Tailscale..."
+          curl -fsSL https://tailscale.com/install.sh | sudo sh
+          sudo tailscale up --authkey "${TAILSCALE_AUTHKEY}" --hostname "${TAILSCALE_HOSTNAME}"
 
-      - name: MacOS System running...
-        uses: mxschmitt/action-tmate@v2
+      - name: Run macOS Mojave Script
+        run: |
+          echo ">>> Downloading & Running macOS Mojave KVM Script..."
+          curl -fsSL https://raw.githubusercontent.com/kmille36/MacOS-Catalina-KVM-Preinstall/refs/heads/main/MacOS-Mojave.sh -o MacOS-Mojave.sh
+          chmod +x MacOS-Mojave.sh
+          ./MacOS-Mojave.sh
+
+      - name: Keep Runner Alive
+        run: |
+          echo ">>> Keeping runner alive..."
+          tail -f /dev/null
