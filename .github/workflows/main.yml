@@ -1,4 +1,4 @@
-name: MacRDP
+name: Mac_VNC
 
 on:
   workflow_dispatch:
