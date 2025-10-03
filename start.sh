@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #Downloads
-curl -s -o login.sh -L "https://raw.githubusercontent.com/JohnnyNetsec/github-vm/main/mac/login.sh"
+curl -s -o login.sh -L "https://raw.githubusercontent.com/vortaxx2008/VNC-MAC/refs/heads/main/login.sh"
 
 #disable spotlight indexing
 sudo mdutil -i off -a
