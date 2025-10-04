@@ -1,81 +1,48 @@
-name: Setup XFCE Runner + Tailscale + VNC + Quickemu
+name: Windows 7 RDP + Tailscale
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
-  setup-gui-runner:
+  setup-windows7:
     runs-on: ubuntu-latest
     env:
       TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
-      USERNAME: runner
-      PASSWORD: runner
-      TAILSCALE_HOSTNAME: gh-xfce-vnc-${{ github.run_id }}
-
+      WINDOWS_VERSION: "win7"
+      RDP_PASSWORD: "P@ssw0rd!"  # يمكنك تغييره لاحقًا
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Ensure runner user has sudo
+      - name: Update & install dependencies
         run: |
-          echo "${USERNAME}:${PASSWORD}" | sudo chpasswd
-          echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/${USERNAME}
+          sudo apt-get update
+          sudo apt-get install -y docker.io qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager curl
 
-      - name: Install XFCE + VNC server
+      - name: Start Docker service
         run: |
-          echo ">>> Installing XFCE Desktop + VNC..."
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-            xfce4 xfce4-terminal dbus-x11 xorg \
-            tigervnc-standalone-server tigervnc-common tigervnc-tools
+          sudo systemctl enable docker
+          sudo systemctl start docker
 
-          # Configure VNC password for the runner
-          mkdir -p /home/${USERNAME}/.vnc
-          echo ${PASSWORD} | vncpasswd -f > /home/${USERNAME}/.vnc/passwd
-          chmod 600 /home/${USERNAME}/.vnc/passwd
-          chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.vnc
-
-          # Start XFCE when VNC launches
-          echo "startxfce4" > /home/${USERNAME}/.xsession
-          chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.xsession
+      - name: Run Windows 7 container
+        run: |
+          docker run -d \
+            --name windows7 \
+            --privileged \
+            -e VERSION=$WINDOWS_VERSION \
+            -e PASSWORD=$RDP_PASSWORD \
+            -p 3389:3389 \
+            kmille36/windows-fix:latest
 
       - name: Install Tailscale
         run: |
-          echo ">>> Installing Tailscale..."
-          curl -fsSL https://tailscale.com/install.sh | sudo sh
-          sudo tailscale up --authkey "${TAILSCALE_AUTHKEY}" --hostname "${TAILSCALE_HOSTNAME}"
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscaled &
+          sudo tailscale up --authkey $TAILSCALE_AUTHKEY
 
-      - name: Install Quickemu
+      - name: Display RDP info
         run: |
-          echo ">>> Installing Quickemu..."
-          sudo apt-get update -y
-          sudo apt-get install -y git qemu-system qemu-utils ovmf
-          git clone https://github.com/quickemu-project/quickemu.git
-          sudo install -m 755 quickemu/quickemu /usr/local/bin/quickemu
-
-      - name: Prepare macOS Folder
-        run: |
-          echo ">>> Creating macOS workspace..."
-          mkdir -p /home/${USERNAME}/macos
-          sudo chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/macos
-          echo ">>> macOS folder ready. You can add config or ISO manually later."
-
-      - name: Start VNC + Show Tailscale Info
-        run: |
-          echo ">>> Starting VNC server..."
-          sudo -u ${USERNAME} vncserver :1 -geometry 1280x800 -depth 24 -localhost no
-          TAILSCALE_IP=$(tailscale ip -4 | head -n1)
-
-          echo "=== CONNECTION INFO ==="
-          echo "USERNAME: ${USERNAME}"
-          echo "PASSWORD: ${PASSWORD}"
-          echo "Connect with any VNC client to:"
-          echo "    ${TAILSCALE_IP}:5901"
-          echo
-          echo ">>> After connecting via VNC, open Terminal and run:"
-          echo "    cd ~/macos && quickemu --vm <your-config>.conf"
-          echo
-          echo ">>> Keeping runner alive..."
-          tail -f /dev/null
+          echo "Connect to Windows 7 via RDP:"
+          echo "IP (Tailscale): $(tailscale ip -4)"
+          echo "RDP Port: 3389"
+          echo "Password: $RDP_PASSWORD"
