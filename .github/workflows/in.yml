@@ -1,68 +1,52 @@
-name: Windows 7 RDP + Tailscale
+name: Setup SSH Runner + Tailscale
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  setup-windows7:
+  setup-ssh-runner:
     runs-on: ubuntu-latest
     env:
       TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
-      WINDOWS_VERSION: "win7"
-      RDP_PASSWORD: "P@ssw0rd!"  # يمكنك تغييره لاحقًا
+      USERNAME: runner
+      PASSWORD: runner
+      TAILSCALE_HOSTNAME: gh-ssh-${{ github.run_id }}
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Update & install prerequisites
+      - name: Ensure runner user has sudo + password
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            apt-transport-https \
-            ca-certificates \
-            curl \
-            gnupg \
-            lsb-release \
-            software-properties-common
+          echo "${USERNAME}:${PASSWORD}" | sudo chpasswd
+          echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/${USERNAME}
 
-      - name: Remove old Docker / containerd packages
+      - name: Install OpenSSH server
         run: |
-          sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
-          sudo apt-get autoremove -y
-
-      - name: Install Docker from official repo
-        run: |
-          sudo mkdir -p /etc/apt/keyrings
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-          sudo apt-get update
-          sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-      - name: Start Docker service
-        run: |
-          sudo systemctl enable docker
-          sudo systemctl start docker
-          docker --version
-
-      - name: Run Windows 7 container
-        run: |
-          docker run -d \
-            --name windows7 \
-            --privileged \
-            -e VERSION=$WINDOWS_VERSION \
-            -e PASSWORD=$RDP_PASSWORD \
-            -p 3389:3389 \
-            kmille36/windows-fix:latest
+          echo ">>> Installing OpenSSH..."
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openssh-server
+          sudo systemctl enable ssh
+          sudo systemctl restart ssh
 
       - name: Install Tailscale
         run: |
-          curl -fsSL https://tailscale.com/install.sh | sh
-          sudo tailscaled &
-          sudo tailscale up --authkey $TAILSCALE_AUTHKEY
+          echo ">>> Installing Tailscale..."
+          curl -fsSL https://tailscale.com/install.sh | sudo sh
+          sudo tailscale up --authkey "${TAILSCALE_AUTHKEY}" --hostname "${TAILSCALE_HOSTNAME}"
 
-      - name: Display RDP info
+      - name: Show SSH Connection Info
         run: |
-          echo "Connect to Windows 7 via RDP:"
-          echo "IP (Tailscale): $(tailscale ip -4)"
-          echo "RDP Port: 3389"
-          echo "Password: $RDP_PASSWORD"
+          TAILSCALE_IP=$(tailscale ip -4 | head -n1)
+          echo "=== SSH CONNECTION INFO ==="
+          echo "IP: ${TAILSCALE_IP}"
+          echo "USERNAME: ${USERNAME}"
+          echo "PASSWORD: ${PASSWORD}"
+          echo
+          echo ">>> Connect with:"
+          echo "    ssh -o StrictHostKeyChecking=no ${USERNAME}@${TAILSCALE_IP}"
+          echo
+          echo ">>> Keeping runner alive..."
+          tail -f /dev/null
