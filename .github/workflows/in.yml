@@ -1,4 +1,4 @@
-name: Setup XFCE Runner + Tailscale + VNC + EduMail Bot
+name: Setup XFCE Runner + Tailscale + VNC + macOS KVM
 
 on:
   workflow_dispatch:
@@ -23,19 +23,25 @@ jobs:
           echo "${USERNAME}:${PASSWORD}" | sudo chpasswd
           echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/${USERNAME}
 
-      - name: Install XFCE + VNC server
+      - name: Install XFCE + VNC server + VNC Viewer
         run: |
-          echo ">>> Installing XFCE Desktop + VNC..."
+          echo ">>> Installing XFCE Desktop + VNC + Viewer..."
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             xfce4 xfce4-terminal dbus-x11 xorg \
-            tigervnc-standalone-server tigervnc-common tigervnc-tools
+            tigervnc-standalone-server tigervnc-common tigervnc-tools \
+            vinagre remmina
 
+          # ✅ Add extra VNC client (lightweight)
+          sudo apt-get install -y -qq xtightvncviewer || true
+
+          # Configure VNC password for the runner
           mkdir -p /home/${USERNAME}/.vnc
           echo ${PASSWORD} | vncpasswd -f > /home/${USERNAME}/.vnc/passwd
           chmod 600 /home/${USERNAME}/.vnc/passwd
           chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.vnc
 
+          # Start XFCE when VNC launches
           echo "startxfce4" > /home/${USERNAME}/.xsession
           chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.xsession
 
@@ -45,36 +51,26 @@ jobs:
           curl -fsSL https://tailscale.com/install.sh | sudo sh
           sudo tailscale up --authkey "${TAILSCALE_AUTHKEY}" --hostname "${TAILSCALE_HOSTNAME}"
 
-      - name: Clone edu-mail-auto-generator repo
+      - name: Download and Prepare macOS Mojave KVM script
         run: |
-          echo ">>> Cloning edu-mail-auto-generator..."
-          git clone https://github.com/kmille36/edu-mail-auto-generator.git /home/${USERNAME}/edu-mail-auto-generator
-          chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/edu-mail-auto-generator
+          echo ">>> Downloading macOS KVM setup script..."
+          wget -q https://raw.githubusercontent.com/kmille36/MacOS-Catalina-KVM-Preinstall/refs/heads/main/MacOS-Mojave.sh -O /home/${USERNAME}/MacOS-Mojave.sh
+          sudo chmod +x /home/${USERNAME}/MacOS-Mojave.sh
+          sudo chown ${USERNAME}:${USERNAME} /home/${USERNAME}/MacOS-Mojave.sh
+          echo ">>> Script downloaded and ready."
 
-      - name: Install Python + Dependencies
+      - name: Run macOS KVM setup script
         run: |
-          echo ">>> Installing Python & dependencies..."
-          sudo apt-get install -y python3 python3-pip
-          pip3 install --upgrade pip
-          pip3 install selenium
-
-          # Optional: install Chrome + chromedriver (if needed)
-          sudo apt-get install -y wget unzip
-          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo apt install -y ./google-chrome-stable_current_amd64.deb
-
-          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+')
-          DRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE")
-          wget https://chromedriver.storage.googleapis.com/${DRIVER_VERSION}/chromedriver_linux64.zip
-          unzip chromedriver_linux64.zip
-          sudo mv chromedriver /usr/local/bin/
-          sudo chmod +x /usr/local/bin/chromedriver
+          echo ">>> Running macOS Mojave setup..."
+          sudo -u ${USERNAME} bash /home/${USERNAME}/MacOS-Mojave.sh || true
 
       - name: Start VNC + Show Tailscale Info
         run: |
           echo ">>> Starting VNC server..."
+          # Run VNC on all interfaces (not only localhost)
           sudo -u ${USERNAME} vncserver :1 -geometry 1280x800 -depth 24 -localhost no
 
+          # Get Tailscale IP
           TAILSCALE_IP=$(tailscale ip -4 | head -n1)
 
           echo "=== CONNECTION INFO ==="
@@ -83,5 +79,6 @@ jobs:
           echo "Connect with any VNC client to:"
           echo "    ${TAILSCALE_IP}:5901"
           echo
-          echo ">>> Project is ready. You can now run the bot manually inside VNC."
+          echo "VNC Viewer (Remmina/Vinagre/xtightvncviewer) installed in XFCE session."
+          echo ">>> Keeping runner alive..."
           tail -f /dev/null
