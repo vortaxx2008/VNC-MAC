@@ -31,11 +31,13 @@ jobs:
             xfce4 xfce4-terminal dbus-x11 xorg \
             tigervnc-standalone-server tigervnc-common tigervnc-tools
 
+          # Configure VNC password for the runner
           mkdir -p /home/${USERNAME}/.vnc
           echo ${PASSWORD} | vncpasswd -f > /home/${USERNAME}/.vnc/passwd
           chmod 600 /home/${USERNAME}/.vnc/passwd
           chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.vnc
 
+          # Start XFCE when VNC launches
           echo "startxfce4" > /home/${USERNAME}/.xsession
           chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.xsession
 
