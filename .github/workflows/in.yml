@@ -1,4 +1,4 @@
-name: Setup XFCE Runner + Tailscale + VNC + macOS KVM
+name: Setup XFCE Runner + Tailscale + VNC + Quickemu
 
 on:
   workflow_dispatch:
@@ -23,25 +23,18 @@ jobs:
           echo "${USERNAME}:${PASSWORD}" | sudo chpasswd
           echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/${USERNAME}
 
-      - name: Install XFCE + VNC server + VNC Viewer
+      - name: Install XFCE + VNC server
         run: |
-          echo ">>> Installing XFCE Desktop + VNC + Viewer..."
+          echo ">>> Installing XFCE Desktop + VNC..."
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             xfce4 xfce4-terminal dbus-x11 xorg \
-            tigervnc-standalone-server tigervnc-common tigervnc-tools \
-            vinagre remmina
+            tigervnc-standalone-server tigervnc-common tigervnc-tools
 
-          # ✅ Add extra VNC client (lightweight)
-          sudo apt-get install -y -qq xtightvncviewer || true
-
-          # Configure VNC password for the runner
           mkdir -p /home/${USERNAME}/.vnc
           echo ${PASSWORD} | vncpasswd -f > /home/${USERNAME}/.vnc/passwd
           chmod 600 /home/${USERNAME}/.vnc/passwd
           chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.vnc
-
-          # Start XFCE when VNC launches
           echo "startxfce4" > /home/${USERNAME}/.xsession
           chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.xsession
 
@@ -51,26 +44,35 @@ jobs:
           curl -fsSL https://tailscale.com/install.sh | sudo sh
           sudo tailscale up --authkey "${TAILSCALE_AUTHKEY}" --hostname "${TAILSCALE_HOSTNAME}"
 
-      - name: Download and Prepare macOS Mojave KVM script
+      - name: Install Quickemu
         run: |
-          echo ">>> Downloading macOS KVM setup script..."
-          wget -q https://raw.githubusercontent.com/kmille36/MacOS-Catalina-KVM-Preinstall/refs/heads/main/MacOS-Mojave.sh -O /home/${USERNAME}/MacOS-Mojave.sh
-          sudo chmod +x /home/${USERNAME}/MacOS-Mojave.sh
-          sudo chown ${USERNAME}:${USERNAME} /home/${USERNAME}/MacOS-Mojave.sh
-          echo ">>> Script downloaded and ready."
+          echo ">>> Installing Quickemu..."
+          sudo apt-get update -y
+          sudo apt-get install -y git qemu-system qemu-utils ovmf
+          git clone https://github.com/quickemu-project/quickemu.git
+          sudo install -m 755 quickemu/quickemu /usr/local/bin/quickemu
 
-      - name: Run macOS KVM setup script
+      - name: Prepare macOS Catalina VM
         run: |
-          echo ">>> Running macOS Mojave setup..."
-          sudo -u ${USERNAME} bash /home/${USERNAME}/MacOS-Mojave.sh || true
+          echo ">>> Preparing macOS Catalina VM..."
+          mkdir -p /home/${USERNAME}/macos
+          cd /home/${USERNAME}/macos
+          cat <<EOF > macos.conf
+guest = macos
+iso = Catalina
+disk_img = macos.qcow2
+disk_size = 40G
+ram = 4G
+cpu_cores = 4
+EOF
+          sudo chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/macos
+          echo ">>> macOS configuration ready. Run it manually later."
 
       - name: Start VNC + Show Tailscale Info
         run: |
           echo ">>> Starting VNC server..."
-          # Run VNC on all interfaces (not only localhost)
           sudo -u ${USERNAME} vncserver :1 -geometry 1280x800 -depth 24 -localhost no
 
-          # Get Tailscale IP
           TAILSCALE_IP=$(tailscale ip -4 | head -n1)
 
           echo "=== CONNECTION INFO ==="
@@ -79,6 +81,9 @@ jobs:
           echo "Connect with any VNC client to:"
           echo "    ${TAILSCALE_IP}:5901"
           echo
-          echo "VNC Viewer (Remmina/Vinagre/xtightvncviewer) installed in XFCE session."
+          echo ">>> After connecting via VNC, run this command in terminal to start macOS:"
+          echo
+          echo "    cd ~/macos && quickemu --vm macos.conf"
+          echo
           echo ">>> Keeping runner alive..."
           tail -f /dev/null
